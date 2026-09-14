@@ -273,6 +273,21 @@ export const GrokIcon: Icon = ({ className, ...props }) => (
   </svg>
 );
 
+export const DeepSeekIcon: Icon = ({ className, ...props }) => (
+  <svg
+    {...props}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("fill-[#4D6BFE] dark:fill-[#7A90FF]", className)}
+  >
+    <rect x="1.5" y="1.5" width="21" height="21" rx="5" />
+    <path
+      fill="#FFFFFF"
+      d="M7.2 16.6V7.4h2.02c2.4 0 3.9 1.28 3.9 3.3 0 1.3-.65 2.3-1.7 2.85l1.95 3.05h-1.75l-1.75-2.8h-1.1v2.8H7.2Zm1.57-4.1h.9c1.35 0 2.2-.7 2.2-1.75 0-1.1-.8-1.7-2.1-1.7h-1v3.45Zm6.2 4.1 2.55-4.6-2.4-4.6h1.7l1.6 3.2 1.6-3.2h1.65l-2.45 4.6 2.6 4.6h-1.7l-1.75-3.3-1.7 3.3h-1.7Z"
+    />
+  </svg>
+);
+
 export const TraeIcon: Icon = (props) => (
   <svg {...props} viewBox="0 0 24 24" fill="currentColor">
     {/* Back rectangle: left strip + bottom strip drawn separately — empty bottom-left corner is the gap between them */}
