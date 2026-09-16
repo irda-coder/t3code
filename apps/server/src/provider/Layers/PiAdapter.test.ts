@@ -3,10 +3,29 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   compactArgsText,
   extractPiResultText,
+  forwardableDeltaText,
   piToolItemExtra,
   tailText,
   toolCommandOf,
 } from "./PiAdapter.ts";
+
+describe("forwardableDeltaText", () => {
+  it("passes standalone newlines through verbatim", () => {
+    expect(forwardableDeltaText("\n")).toBe("\n");
+    expect(forwardableDeltaText("  \n  ")).toBe("  \n  ");
+  });
+
+  it("passes normal text through", () => {
+    expect(forwardableDeltaText("hello")).toBe("hello");
+  });
+
+  it("drops empty strings and non-strings", () => {
+    expect(forwardableDeltaText("")).toBeUndefined();
+    expect(forwardableDeltaText(undefined)).toBeUndefined();
+    expect(forwardableDeltaText(null)).toBeUndefined();
+    expect(forwardableDeltaText(42)).toBeUndefined();
+  });
+});
 
 describe("extractPiResultText", () => {
   it("joins text blocks", () => {

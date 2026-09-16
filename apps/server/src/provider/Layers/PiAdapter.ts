@@ -132,6 +132,16 @@ function asString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
+/**
+ * Delta text eligible for `content.delta` forwarding. Whitespace-only
+ * deltas (notably pi's standalone `"\n"` events) must pass through
+ * verbatim — trimming them here joins lines in the UI. Only truly empty
+ * strings are dropped as noise.
+ */
+export function forwardableDeltaText(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 /** Bound output text per tool item (mirrors the ACP tail-window idea). */
 export const PI_TOOL_TEXT_MAX_CHARS = 2000;
 
@@ -446,8 +456,11 @@ export function makePiAdapter(
             const delta = asRecord(event["assistantMessageEvent"]);
             const kind = asString(delta["type"]) ?? "";
             if (kind === "text_delta") {
-              const text = asString(delta["delta"]);
-              if (text) {
+              // Forward verbatim, including whitespace-only deltas: pi
+              // streams newlines as standalone events and trimming them
+              // here joins lines in the UI (asString would drop "\n").
+              const text = forwardableDeltaText(delta["delta"]);
+              if (text !== undefined) {
                 yield* offerRuntimeEvent(
                   makeAcpContentDeltaEvent({
                     stamp: yield* makeEventStamp(),
@@ -462,8 +475,8 @@ export function makePiAdapter(
               return;
             }
             if (kind === "thinking_delta") {
-              const text = asString(delta["delta"]);
-              if (text) {
+              const text = forwardableDeltaText(delta["delta"]);
+              if (text !== undefined) {
                 yield* offerRuntimeEvent(
                   makeAcpContentDeltaEvent({
                     stamp: yield* makeEventStamp(),
