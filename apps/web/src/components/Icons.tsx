@@ -293,9 +293,12 @@ export const PiIcon: Icon = ({ className, ...props }) => (
   >
     <text
       x="12"
-      y="20"
+      y="12"
       textAnchor="middle"
-      fontSize="22"
+      dominantBaseline="central"
+      textLength="22"
+      lengthAdjust="spacingAndGlyphs"
+      fontSize="28"
       fontStyle="italic"
       fontWeight="900"
       fontFamily="Georgia, 'Times New Roman', serif"
