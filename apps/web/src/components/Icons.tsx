@@ -293,13 +293,12 @@ export const PiIcon: Icon = ({ className, ...props }) => (
   >
     <text
       x="12"
-      y="18"
+      y="20"
       textAnchor="middle"
-      fontSize="17"
+      fontSize="22"
       fontStyle="italic"
-      fontWeight="bold"
+      fontWeight="900"
       fontFamily="Georgia, 'Times New Roman', serif"
-      fill="currentColor"
     >
       π
     </text>

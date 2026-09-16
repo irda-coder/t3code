@@ -80,9 +80,9 @@ export function ProviderIcon(props: ProviderIconProps) {
       <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
         <SvgText
           x={size / 2}
-          y={size * 0.78}
+          y={size * 0.82}
           textAnchor="middle"
-          fontSize={size * 0.72}
+          fontSize={size * 0.85}
           fontStyle="italic"
           fontWeight="bold"
           fill="#EA580C"
