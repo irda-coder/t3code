@@ -5,6 +5,7 @@ import {
   CursorSettings,
   DshSettings,
   GrokSettings,
+  PiSettings,
   OpenCodeSettings,
   ProviderDriverKind,
 } from "@t3tools/contracts";
@@ -15,6 +16,7 @@ import {
   CursorIcon,
   DeepSeekIcon,
   GrokIcon,
+  PiIcon,
   type Icon,
   OpenAI,
   OpenCodeIcon,
@@ -78,6 +80,13 @@ const PROVIDER_CLIENT_DEFINITIONS: readonly ProviderClientDefinition[] = [
     icon: DeepSeekIcon,
     badgeLabel: "Early Access",
     settingsSchema: DshSettings,
+  },
+  {
+    value: ProviderDriverKind.make("pi"),
+    label: "pi",
+    icon: PiIcon,
+    badgeLabel: "Early Access",
+    settingsSchema: PiSettings,
   },
   {
     value: ProviderDriverKind.make("opencode"),

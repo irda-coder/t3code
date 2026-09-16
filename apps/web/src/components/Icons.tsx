@@ -284,6 +284,28 @@ export const DeepSeekIcon: Icon = ({ className, ...props }) => (
   </svg>
 );
 
+export const PiIcon: Icon = ({ className, ...props }) => (
+  <svg
+    {...props}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("fill-[#EA580C] dark:fill-[#FB923C]", className)}
+  >
+    <text
+      x="12"
+      y="18"
+      textAnchor="middle"
+      fontSize="17"
+      fontStyle="italic"
+      fontWeight="bold"
+      fontFamily="Georgia, 'Times New Roman', serif"
+      fill="currentColor"
+    >
+      π
+    </text>
+  </svg>
+);
+
 export const TraeIcon: Icon = (props) => (
   <svg {...props} viewBox="0 0 24 24" fill="currentColor">
     {/* Back rectangle: left strip + bottom strip drawn separately — empty bottom-left corner is the gap between them */}
