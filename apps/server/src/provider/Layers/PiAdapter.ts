@@ -40,6 +40,7 @@ import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
+import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
@@ -129,6 +130,86 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+/** Bound output text per tool item (mirrors the ACP tail-window idea). */
+export const PI_TOOL_TEXT_MAX_CHARS = 2000;
+
+const encodeArgsJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+
+/** Join `{type:"text", text}` blocks of a pi result/partial content array. */
+export function extractPiResultText(content: unknown): string {
+  if (!Array.isArray(content)) {
+    return "";
+  }
+  const parts: Array<string> = [];
+  for (const entry of content) {
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+    const record = entry as Record<string, unknown>;
+    if (record["type"] === "text" && typeof record["text"] === "string") {
+      parts.push(record["text"]);
+    }
+  }
+  return parts.join("\n");
+}
+
+export function tailText(text: string, maxChars: number = PI_TOOL_TEXT_MAX_CHARS): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxChars) {
+    return trimmed;
+  }
+  return `…[truncated]${trimmed.slice(trimmed.length - maxChars)}`;
+}
+
+/** Command string for bash-like tools; undefined for everything else. */
+export function toolCommandOf(
+  toolName: string,
+  args: Record<string, unknown>,
+): string | undefined {
+  const name = toolName.trim().toLowerCase();
+  if (name !== "bash" && name !== "shell" && name !== "command") {
+    return undefined;
+  }
+  return asString(args["command"]);
+}
+
+/** One-line args summary for non-bash tools. */
+export function compactArgsText(args: Record<string, unknown>): string | undefined {
+  const keys = Object.keys(args);
+  if (keys.length === 0) {
+    return undefined;
+  }
+  return tailText(encodeArgsJson(args), 500);
+}
+
+/** Detail + data for a tool_execution_* event (args, command, outputs). */
+export function piToolItemExtra(
+  toolName: string,
+  event: PiRpcEvent,
+  resultText?: string,
+): { readonly detail?: string; readonly data?: Record<string, unknown> } {
+  const args = asRecord(event["args"]);
+  const command = toolCommandOf(toolName, args);
+  const text = resultText?.trim() ?? "";
+  const detail = text ? tailText(text) : (command ?? compactArgsText(args));
+  const data: Record<string, unknown> = {
+    toolCallId: asString(event["toolCallId"]) ?? "",
+    kind: toolName,
+    ...(command ? { command } : {}),
+    rawInput: args,
+  };
+  if (resultText !== undefined) {
+    data["rawOutput"] = event["result"] ?? event["partialResult"] ?? null;
+    if (text) {
+      data["content"] = text.slice(0, PI_TOOL_TEXT_MAX_CHARS);
+    }
+  }
+  return {
+    ...(detail ? { detail } : {}),
+    data,
+  };
 }
 
 export function makePiAdapter(
@@ -303,23 +384,34 @@ export function makePiAdapter(
       toolName: string,
       status: "inProgress" | "completed" | "failed",
       rawEvent: PiRpcEvent,
+      extra?: { readonly detail?: string; readonly data?: Record<string, unknown> },
     ) =>
       Effect.gen(function* () {
         yield* offerRuntimeEvent({
-        type: lifecycle,
-        ...(yield* makeEventStamp()),
-        provider: PROVIDER,
-        threadId: ctx.threadId,
-        turnId: ctx.activeTurnId,
-        itemId: RuntimeItemId.make(toolCallId),
-        payload: {
-          itemType: canonicalItemTypeFromAcpToolKind(acpKindForToolName(toolName)),
-          status,
-          title: toolName,
-        },
-        raw: { source: "pi.rpc", method: rawEvent.type, payload: rawEvent },
+          type: lifecycle,
+          ...(yield* makeEventStamp()),
+          provider: PROVIDER,
+          threadId: ctx.threadId,
+          turnId: ctx.activeTurnId,
+          itemId: RuntimeItemId.make(toolCallId),
+          payload: {
+            itemType: canonicalItemTypeFromAcpToolKind(acpKindForToolName(toolName)),
+            status,
+            title: toolName,
+            ...(extra?.detail ? { detail: extra.detail } : {}),
+            ...(extra?.data ? { data: extra.data } : {}),
+          },
+          raw: { source: "pi.rpc", method: rawEvent.type, payload: rawEvent },
         });
       });
+
+    /** Detail + data for a tool_execution_* event (args, command, outputs). */
+    const toolExecutionExtra = (
+      toolName: string,
+      event: PiRpcEvent,
+      resultText?: string,
+    ): { readonly detail?: string; readonly data?: Record<string, unknown> } =>
+      piToolItemExtra(toolName, event, resultText);
 
     const handleRpcEvent = (ctx: PiSessionContext, event: PiRpcEvent) =>
       Effect.gen(function* () {
@@ -397,28 +489,63 @@ export function makePiAdapter(
               );
               return;
             }
+            if (kind === "toolcall_end") {
+              const full = asRecord(delta["toolCall"]);
+              const toolName =
+                asString(delta["toolName"]) ?? asString(full["name"]) ?? "tool";
+              const toolArgs = asRecord(full["arguments"] ?? full["input"]);
+              const command = toolCommandOf(toolName, toolArgs);
+              const detail = command ?? compactArgsText(toolArgs) ?? toolName;
+              yield* emitToolItem(
+                ctx,
+                "item.updated",
+                asString(delta["id"]) ??
+                  asString(full["id"]) ??
+                  `pi-tool-${ctx.activeTurnId ?? "x"}`,
+                toolName,
+                "inProgress",
+                event,
+                {
+                  detail,
+                  data: {
+                    toolCallId: asString(delta["id"]) ?? "",
+                    kind: toolName,
+                    ...(command ? { command } : {}),
+                    rawInput: toolArgs,
+                  },
+                },
+              );
+              return;
+            }
             return;
           }
           case "tool_execution_start":
           case "tool_execution_update": {
+            const toolName = asString(event["toolName"]) ?? "tool";
+            const partial = asRecord(event["partialResult"]);
+            const partialText = extractPiResultText(partial["content"]);
             yield* emitToolItem(
               ctx,
               "item.updated",
               asString(event["toolCallId"]) ?? `pi-tool-${ctx.activeTurnId ?? "x"}`,
-              asString(event["toolName"]) ?? "tool",
+              toolName,
               "inProgress",
               event,
+              toolExecutionExtra(toolName, event, partialText || undefined),
             );
             return;
           }
           case "tool_execution_end": {
+            const toolName = asString(event["toolName"]) ?? "tool";
+            const resultText = extractPiResultText(asRecord(event["result"])["content"]);
             yield* emitToolItem(
               ctx,
               "item.completed",
               asString(event["toolCallId"]) ?? `pi-tool-${ctx.activeTurnId ?? "x"}`,
-              asString(event["toolName"]) ?? "tool",
+              toolName,
               event["isError"] === true ? "failed" : "completed",
               event,
+              toolExecutionExtra(toolName, event, resultText || undefined),
             );
             return;
           }

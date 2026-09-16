@@ -5,6 +5,7 @@
  */
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
@@ -68,8 +69,9 @@ describe("pi RPC fake transport", () => {
         expect((state.data as { sessionId?: string }).sessionId).toBe("fake-session");
         yield* rpc.send({ type: "prompt", message: "hello" });
         yield* Fiber.interrupt(pump);
-        const deadline = Date.now() + 15_000;
-        while (Date.now() < deadline && !seen.includes("agent_settled")) {
+        const t0 = yield* Clock.currentTimeMillis;
+        let now = t0;
+        while (now - t0 < 15_000 && !seen.includes("agent_settled")) {
           const next = yield* Queue.take(rpc.events).pipe(Effect.timeoutOption(1_000));
           if (next._tag === "Some") {
             seen.push(next.value.type);
@@ -77,6 +79,7 @@ describe("pi RPC fake transport", () => {
               break;
             }
           }
+          now = yield* Clock.currentTimeMillis;
         }
         expect(seen).toContain("agent_start");
         expect(seen).toContain("agent_settled");
@@ -107,8 +110,9 @@ describe("pi RPC fake transport", () => {
         const rpc = yield* makeFakeRuntime();
         yield* rpc.send({ type: "prompt", message: "hello" });
         const collected: Array<string> = [];
-        const deadline = Date.now() + 15_000;
-        while (Date.now() < deadline) {
+        const start = yield* Clock.currentTimeMillis;
+        let at = start;
+        while (at - start < 15_000) {
           const next = yield* Queue.take(rpc.events).pipe(Effect.timeoutOption(1_000));
           if (next._tag === "Some") {
             collected.push(next.value.type);
@@ -116,6 +120,7 @@ describe("pi RPC fake transport", () => {
               break;
             }
           }
+          at = yield* Clock.currentTimeMillis;
         }
         expect(collected).toContain("agent_settled");
       }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
